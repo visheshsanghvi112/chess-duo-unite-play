@@ -30,7 +30,9 @@ const Index = () => {
             <li>Pawn promotion</li>
             <li>Sound effects for all moves and events</li>
             <li>Proper chess notation in move history</li>
-            <li>Mobile-friendly interface</li>
+            <li>Mobile-friendly interface with fullscreen mode</li>
+            <li>Adjustable layout (horizontal or vertical)</li>
+            <li>Option to hide game information for more board space</li>
             <li>Dark and light theme support</li>
           </ul>
         </div>

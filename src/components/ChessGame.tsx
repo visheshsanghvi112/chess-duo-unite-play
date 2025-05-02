@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import ChessBoard from './ChessBoard';
 import GameInfo from './GameInfo';
 import PawnPromotionModal from './PawnPromotionModal';
 import RoomModal from './RoomModal';
+import LayoutControls from './LayoutControls';
 import { GameMode, GameState, GameStatus, Move, Piece, PieceColor, PieceType, Position } from '../types/chess';
 import { cloneBoard, findKingPosition, generateRoomId, initializeChessBoard, isPawnPromotion } from '../utils/chessUtils';
 import { getValidMoves, isCheckmate, isInCheck, isStalemate } from '../utils/moveValidator';
@@ -16,6 +16,11 @@ interface ChessGameProps {
 
 const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }) => {
   const { toast } = useToast();
+  
+  // Layout settings
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [layoutType, setLayoutType] = useState<'horizontal' | 'vertical'>('horizontal');
+  const [showGameInfo, setShowGameInfo] = useState(true);
   
   // Sound settings
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -55,6 +60,34 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     isOpen: false,
     type: 'create',
   });
+
+  // Handle fullscreen toggle
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        toast({
+          title: "Error",
+          description: `Could not enter fullscreen: ${err.message}`,
+          variant: "destructive",
+        });
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+    setIsFullscreen(!isFullscreen);
+  };
+
+  // Update fullscreen state when exiting fullscreen via browser controls
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   // Toggle sound effects
   const handleToggleSound = () => {
@@ -434,10 +467,29 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     setRoomModal({ ...roomModal, isOpen: false });
   };
 
+  // Determine the container classes based on layout
+  const containerClasses = layoutType === 'horizontal'
+    ? "grid grid-cols-1 md:grid-cols-3 gap-6"
+    : "grid grid-cols-1 gap-6";
+
+  // Determine the board container classes based on layout
+  const boardContainerClasses = layoutType === 'horizontal'
+    ? "md:col-span-2"
+    : "";
+
   return (
-    <div className="max-w-6xl mx-auto px-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2">
+    <div className={`max-w-6xl mx-auto px-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-background p-4 overflow-auto' : ''}`}>
+      <LayoutControls
+        isFullscreen={isFullscreen}
+        layoutType={layoutType}
+        showGameInfo={showGameInfo}
+        onToggleFullscreen={toggleFullscreen}
+        onChangeLayout={(layout) => setLayoutType(layout)}
+        onToggleGameInfo={() => setShowGameInfo(!showGameInfo)}
+      />
+      
+      <div className={containerClasses}>
+        <div className={boardContainerClasses}>
           <ChessBoard 
             gameState={gameState}
             onSquareClick={handleSquareClick}
@@ -445,16 +497,18 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
           />
         </div>
         
-        <div>
-          <GameInfo 
-            gameState={gameState}
-            onRestart={handleRestart}
-            onCreateRoom={handleCreateRoom}
-            onJoinRoom={handleJoinRoom}
-            soundEnabled={soundEnabled}
-            onToggleSound={handleToggleSound}
-          />
-        </div>
+        {showGameInfo && (
+          <div>
+            <GameInfo 
+              gameState={gameState}
+              onRestart={handleRestart}
+              onCreateRoom={handleCreateRoom}
+              onJoinRoom={handleJoinRoom}
+              soundEnabled={soundEnabled}
+              onToggleSound={handleToggleSound}
+            />
+          </div>
+        )}
       </div>
       
       {/* Pawn Promotion Modal */}
