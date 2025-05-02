@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import ChessBoard from './ChessBoard';
 import GameInfo from './GameInfo';
@@ -7,6 +8,7 @@ import { GameMode, GameState, GameStatus, Move, Piece, PieceColor, PieceType, Po
 import { cloneBoard, findKingPosition, generateRoomId, initializeChessBoard, isPawnPromotion } from '../utils/chessUtils';
 import { getValidMoves, isCheckmate, isInCheck, isStalemate } from '../utils/moveValidator';
 import { useToast } from "@/components/ui/use-toast";
+import { playSound, setSoundMuted } from '../utils/soundUtils';
 
 interface ChessGameProps {
   initialMode?: GameMode;
@@ -14,6 +16,9 @@ interface ChessGameProps {
 
 const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }) => {
   const { toast } = useToast();
+  
+  // Sound settings
+  const [soundEnabled, setSoundEnabled] = useState(true);
   
   // Game state
   const [gameState, setGameState] = useState<GameState>({
@@ -51,6 +56,18 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     type: 'create',
   });
 
+  // Toggle sound effects
+  const handleToggleSound = () => {
+    const newSoundState = !soundEnabled;
+    setSoundEnabled(newSoundState);
+    setSoundMuted(!newSoundState);
+    
+    toast({
+      title: newSoundState ? "Sounds enabled" : "Sounds disabled",
+      description: newSoundState ? "Game sounds are now on" : "Game sounds are now off",
+    });
+  };
+
   // Handle square click
   const handleSquareClick = (position: Position) => {
     const { board, currentPlayer, selectedPiece, gameStatus, isOnline, playerColor } = gameState;
@@ -67,6 +84,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         description: "Wait for your opponent to make a move.",
         variant: "destructive",
       });
+      playSound('illegal');
       return;
     }
     
@@ -108,6 +126,11 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             selectedPiece: null,
             validMoves: [],
           }));
+          
+          // Play illegal move sound if trying to move to invalid square
+          if (piece && piece.color !== currentPlayer) {
+            playSound('illegal');
+          }
         }
       }
     } else {
@@ -154,6 +177,9 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         isPromotion: true,
       };
       
+      // Play promotion sound
+      playSound('promotion');
+      
       setGameState(prev => ({
         ...prev,
         board: newBoard,
@@ -193,9 +219,22 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       
       if (isCheckmate(newBoard, nextPlayer)) {
         gameStatus = 'checkmate';
+        // Play checkmate sound
+        playSound('checkmate');
+      } else {
+        // Play check sound
+        playSound('check');
       }
     } else if (isStalemate(newBoard, nextPlayer)) {
       gameStatus = 'stalemate';
+      playSound('draw');
+    } else {
+      // Play move or capture sound
+      if (capturedPiece) {
+        playSound('capture');
+      } else {
+        playSound('move');
+      }
     }
     
     // Update game state
@@ -251,9 +290,13 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         
         if (isCheckmate(newBoard, nextPlayer)) {
           gameStatus = 'checkmate';
+          playSound('checkmate');
+        } else {
+          playSound('check');
         }
       } else if (isStalemate(newBoard, nextPlayer)) {
         gameStatus = 'stalemate';
+        playSound('draw');
       }
       
       // Update game state
@@ -408,6 +451,8 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             onRestart={handleRestart}
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
+            soundEnabled={soundEnabled}
+            onToggleSound={handleToggleSound}
           />
         </div>
       </div>

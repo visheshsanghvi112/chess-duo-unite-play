@@ -1,14 +1,18 @@
 
 import React from 'react';
 import { GameState, Move, PieceColor } from '../types/chess';
-import { formatTime, positionToAlgebraic } from '../utils/chessUtils';
+import { formatMoveForDisplay } from '../utils/notationUtils';
 import { Button } from "@/components/ui/button";
+import { Bell, BellOff } from 'lucide-react';
+import { setSoundMuted } from '../utils/soundUtils';
 
 interface GameInfoProps {
   gameState: GameState;
   onRestart: () => void;
   onCreateRoom: () => void;
   onJoinRoom: () => void;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
 }
 
 const GameInfo: React.FC<GameInfoProps> = ({
@@ -16,8 +20,10 @@ const GameInfo: React.FC<GameInfoProps> = ({
   onRestart,
   onCreateRoom,
   onJoinRoom,
+  soundEnabled,
+  onToggleSound,
 }) => {
-  const { currentPlayer, gameStatus, history, isOnline, roomId } = gameState;
+  const { currentPlayer, gameStatus, history, isOnline, roomId, check } = gameState;
 
   const renderStatus = () => {
     switch (gameStatus) {
@@ -33,15 +39,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
       default:
         return <span>{currentPlayer === 'white' ? 'White' : 'Black'}'s turn</span>;
     }
-  };
-
-  const formatMove = (move: Move, index: number) => {
-    const from = positionToAlgebraic(move.from);
-    const to = positionToAlgebraic(move.to);
-    const pieceSymbol = move.piece.type === 'pawn' ? '' : move.piece.type.charAt(0).toUpperCase();
-    const captureSymbol = move.capturedPiece ? 'x' : '';
-    
-    return `${pieceSymbol}${from}${captureSymbol}${to}`;
   };
 
   return (
@@ -67,6 +64,10 @@ const GameInfo: React.FC<GameInfoProps> = ({
             New Game
           </Button>
           
+          <Button onClick={onToggleSound} variant="outline" className="px-3" title={soundEnabled ? "Mute sounds" : "Unmute sounds"}>
+            {soundEnabled ? <Bell size={18} /> : <BellOff size={18} />}
+          </Button>
+          
           {!isOnline && (
             <>
               <Button onClick={onCreateRoom} variant="secondary">
@@ -87,17 +88,23 @@ const GameInfo: React.FC<GameInfoProps> = ({
             <p className="text-gray-500 italic">No moves yet</p>
           ) : (
             <div className="grid grid-cols-2 gap-1">
-              {history.map((move, idx) => (
-                <div 
-                  key={idx} 
-                  className={`px-2 py-1 ${idx % 2 === 0 ? 'bg-background rounded-sm' : ''}`}
-                >
-                  {idx % 2 === 0 && (
-                    <span className="font-semibold mr-1">{Math.floor(idx/2) + 1}.</span>
-                  )}
-                  {formatMove(move, idx)}
-                </div>
-              ))}
+              {history.map((move, idx) => {
+                const moveNumber = idx + 1;
+                const isCheckMove = idx === history.length - 1 && check.inCheck;
+                const isCheckmateMove = isCheckMove && gameStatus === 'checkmate';
+                
+                return (
+                  <div 
+                    key={idx} 
+                    className={`px-2 py-1 ${idx % 2 === 0 ? 'bg-background rounded-sm' : ''}`}
+                  >
+                    {idx % 2 === 0 && (
+                      <span className="font-semibold mr-1">{Math.ceil(moveNumber/2)}.</span>
+                    )}
+                    {formatMoveForDisplay(move, moveNumber, isCheckMove, isCheckmateMove)}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

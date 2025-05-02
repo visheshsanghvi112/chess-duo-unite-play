@@ -43,6 +43,16 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Chess specific colors */
+    --chess-light-square: 39 70% 90%;
+    --chess-dark-square: 341 80% 40%;
+    --chess-light-square-dark: 39 30% 30%;
+    --chess-dark-square-dark: 341 40% 20%;
+    --chess-selected: 43 100% 50% / 0.3;
+    --chess-move-highlight: 120 100% 50% / 0.4;
+    --chess-check: 0 100% 50% / 0.4;
+    --chess-burgundy: 341 90% 35%;
   }
 
   .dark {
@@ -132,6 +142,16 @@
   .chess-square-check {
     @apply after:absolute after:inset-0 after:bg-chess-check after:z-0;
   }
+
+  /* 3D effect for chess pieces */
+  .chess-piece-3d {
+    @apply transform-gpu hover:translate-y-[-2px] hover:scale-110 transition-all duration-200;
+    filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.3));
+  }
+  
+  .dark .chess-piece-3d {
+    filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.7));
+  }
 }
 
 /* Mobile optimizations */
@@ -143,4 +163,51 @@
   .container {
     @apply px-2;
   }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Movement feedback animations */
+@keyframes moveHint {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.3;
+  }
+}
+
+.animate-move-hint {
+  animation: moveHint 1.5s ease-in-out infinite;
 }

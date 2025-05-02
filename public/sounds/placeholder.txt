@@ -1,0 +1,12 @@
+
+This directory contains sound effects for the chess game:
+
+- move.mp3: Sound for moving pieces
+- capture.mp3: Sound for capturing pieces
+- check.mp3: Sound for putting king in check
+- checkmate.mp3: Sound for checkmate
+- draw.mp3: Sound for stalemate or draw
+- illegal.mp3: Sound for invalid moves
+- promotion.mp3: Sound for pawn promotion
+
+Please add MP3 files with these names to enable sound effects.
