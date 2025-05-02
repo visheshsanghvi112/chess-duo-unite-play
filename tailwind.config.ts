@@ -67,6 +67,8 @@ export default {
 				chess: {
 					'light-square': '#F5DEB3',
 					'dark-square': '#8B4513',
+					'light-square-dark': '#805b39', // Darker version for dark mode
+					'dark-square-dark': '#3b2614', // Darker version for dark mode
 					'selected': 'rgba(255, 215, 0, 0.5)', // Gold with opacity
 					'move-highlight': 'rgba(0, 128, 0, 0.5)', // Green with opacity
 					'check': 'rgba(255, 0, 0, 0.4)', // Red with opacity
@@ -103,13 +105,18 @@ export default {
 				'fade-in': {
 					from: { opacity: '0' },
 					to: { opacity: '1' }
+				},
+				'piece-rotate': {
+					'0%': { transform: 'rotateY(0deg)' },
+					'100%': { transform: 'rotateY(360deg)' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
 				'piece-bounce': 'piece-bounce 0.3s ease-in-out',
-				'fade-in': 'fade-in 0.5s ease-in'
+				'fade-in': 'fade-in 0.5s ease-out',
+				'piece-rotate': 'piece-rotate 0.8s ease-in-out'
 			}
 		}
 	},

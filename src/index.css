@@ -104,6 +104,7 @@
     @apply scale-110 cursor-grabbing;
   }
 
+  /* Dark mode aware chess board colors */
   .chess-board {
     @apply grid grid-cols-8 border-4 border-chess-burgundy rounded-md overflow-hidden shadow-2xl;
   }
@@ -113,11 +114,11 @@
   }
 
   .chess-square-light {
-    @apply bg-chess-light-square;
+    @apply bg-chess-light-square dark:bg-chess-light-square-dark;
   }
 
   .chess-square-dark {
-    @apply bg-chess-dark-square;
+    @apply bg-chess-dark-square dark:bg-chess-dark-square-dark;
   }
   
   .chess-square-selected {
@@ -130,5 +131,16 @@
   
   .chess-square-check {
     @apply after:absolute after:inset-0 after:bg-chess-check after:z-0;
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .chess-board {
+    @apply border-2;
+  }
+  
+  .container {
+    @apply px-2;
   }
 }

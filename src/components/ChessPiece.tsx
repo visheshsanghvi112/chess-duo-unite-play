@@ -11,16 +11,15 @@ interface ChessPieceProps {
 const ChessPiece: React.FC<ChessPieceProps> = ({ piece, isDragging = false }) => {
   const { color, type } = piece;
   
-  // Load appropriate SVG image for the piece
-  const getPieceSrc = () => {
-    return `/chess-pieces/${color}-${type}.svg`;
-  };
+  const baseClasses = "chess-piece z-10 w-full h-full flex items-center justify-center";
+  const sizeClasses = "text-3xl sm:text-4xl"; // Smaller text on mobile
+  const animationClasses = isDragging ? "scale-110 cursor-grabbing" : "hover:scale-105";
   
   return (
-    <div className={`chess-piece z-10 ${isDragging ? 'chess-piece-dragging' : ''}`}>
-      <div className="w-full h-full flex items-center justify-center text-4xl">
+    <div className={`${baseClasses} ${sizeClasses} ${animationClasses} transition-all`}>
+      <span className={color === 'white' ? 'text-white drop-shadow-md' : 'text-black drop-shadow-md'}>
         {pieceToUnicode(piece)}
-      </div>
+      </span>
     </div>
   );
 };

@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { GameState, PieceColor, Position } from '../types/chess';
+import { GameState, Position } from '../types/chess';
 import ChessSquare from './ChessSquare';
-import { getSquareColor, isValidPosition } from '../utils/chessUtils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ChessBoardProps {
   gameState: GameState;
@@ -11,7 +11,8 @@ interface ChessBoardProps {
 }
 
 const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipped = false }) => {
-  const { board, selectedPiece, validMoves, check, currentPlayer, playerColor } = gameState;
+  const { board, selectedPiece, validMoves, check } = gameState;
+  const isMobile = useIsMobile();
 
   // Determine if a position is a valid move
   const isValidMovePosition = (pos: Position): boolean => {
@@ -68,6 +69,15 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
     const displayFiles = flipped ? [...files].reverse() : files;
     const displayRanks = flipped ? [...ranks].reverse() : ranks;
 
+    if (isMobile) {
+      // Simplified labels for mobile
+      return (
+        <div className="flex-1 chess-board">
+          {renderBoard()}
+        </div>
+      );
+    }
+
     return (
       <>
         <div className="flex">
@@ -116,7 +126,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
   };
 
   return (
-    <div className="chess-board-container max-w-xl w-full">
+    <div className="chess-board-container max-w-full w-full">
       {renderBoardLabels()}
     </div>
   );
