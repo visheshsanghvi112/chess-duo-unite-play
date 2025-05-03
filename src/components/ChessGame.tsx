@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { playSound, setSoundMuted } from '../utils/soundUtils';
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from 'react-router-dom';
+import { crypto } from 'crypto';
 
 interface ChessGameProps {
   initialMode?: GameMode;
@@ -193,40 +194,166 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     };
   }, [gameState.isOnline, gameState.roomId, gameState.playerColor]);
 
+  // Create a new room
+  const createRoom = async (customRoomId?: string) => {
+    if (!sessionId) {
+      toast({
+        title: "Session Error",
+        description: "Could not create a room. Please try refreshing the page.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const roomId = customRoomId || generateRoomId();
+    const initialBoard = initializeChessBoard();
+    
+    try {
+      // Generate a proper UUID for player IDs
+      // Supabase expects UUIDs for auth.users references
+      const playerUUID = crypto.randomUUID();
+      
+      // Save the room to Supabase
+      const { error } = await supabase
+        .from('chess_rooms')
+        .insert({
+          id: roomId,
+          board_state: serializeBoard(initialBoard),
+          player_white: playerUUID,
+          current_player: 'white',
+          game_status: 'playing',
+          history: serializeHistory([]),
+          timers: serializeTimers(DEFAULT_TIMERS)
+        });
+      
+      if (error) throw error;
+      
+      // Store the UUID in sessionStorage for persistence
+      localStorage.setItem('chessPlayerUUID', playerUUID);
+      
+      // Navigate to the room
+      navigate(`/room/${roomId}`);
+      
+      toast({
+        title: "Room Created",
+        description: `Room ID: ${roomId} - Share this with your opponent.`,
+      });
+    } catch (error) {
+      console.error('Error creating room:', error);
+      toast({
+        title: "Error Creating Room",
+        description: "Could not create the room. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
+    setRoomModal({ isOpen: false, type: 'create' });
+  };
+
+  // Join an existing room
+  const joinRoom = async (roomId: string) => {
+    if (!roomId || roomId.length !== 6) {
+      toast({
+        title: "Invalid Room ID",
+        description: "Please enter a valid 6-character room ID.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!sessionId) {
+      toast({
+        title: "Session Error",
+        description: "Could not join the room. Please try refreshing the page.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      // Check if the room exists
+      const { data, error } = await supabase
+        .from('chess_rooms')
+        .select('*')
+        .eq('id', roomId)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      if (!data) {
+        toast({
+          title: "Room Not Found",
+          description: "The room you entered doesn't exist.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // See if we've previously joined this room
+      let playerUUID = localStorage.getItem('chessPlayerUUID');
+      
+      // If not, generate a new UUID for this player
+      if (!playerUUID) {
+        playerUUID = crypto.randomUUID();
+        localStorage.setItem('chessPlayerUUID', playerUUID);
+      }
+      
+      // Navigate to the room
+      navigate(`/room/${roomId}`);
+      
+      toast({
+        title: "Room Joined",
+        description: `You've joined room ${roomId}.`,
+      });
+    } catch (error) {
+      console.error('Error joining room:', error);
+      toast({
+        title: "Error Joining Room",
+        description: "Could not join the room. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
+    setRoomModal({ isOpen: false, type: 'join' });
+  };
+
   // Initialize online game from Supabase if roomId is provided
   useEffect(() => {
     const loadRoom = async () => {
-      if (!gameState.isOnline || !gameState.roomId || !sessionId) return;
+      if (!gameState.isOnline || !gameState.roomId) return;
 
       try {
         const { data, error } = await supabase
           .from('chess_rooms')
           .select('*')
           .eq('id', gameState.roomId)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
 
         if (data) {
+          // Get the player UUID from localStorage
+          const playerUUID = localStorage.getItem('chessPlayerUUID');
+          
           let playerColor: PieceColor | undefined = undefined;
           let updateNeeded = false;
           let updateData: any = {};
           
           // Check if this player is already registered as white or black
-          if (data.player_white === sessionId) {
+          if (data.player_white === playerUUID) {
             playerColor = 'white';
-          } else if (data.player_black === sessionId) {
+          } else if (data.player_black === playerUUID) {
             playerColor = 'black';
           } else if (!data.player_white) {
             // Join as white if available
             playerColor = 'white';
             updateNeeded = true;
-            updateData.player_white = sessionId;
+            updateData.player_white = playerUUID;
           } else if (!data.player_black) {
             // Join as black if available
             playerColor = 'black';
             updateNeeded = true;
-            updateData.player_black = sessionId;
+            updateData.player_black = playerUUID;
           } else {
             // Room is full, join as spectator
             toast({
@@ -236,7 +363,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
           }
           
           // Update the room with player info if needed
-          if (updateNeeded) {
+          if (updateNeeded && playerUUID) {
             await supabase
               .from('chess_rooms')
               .update(updateData)
@@ -277,7 +404,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     };
 
     loadRoom();
-  }, [gameState.isOnline, gameState.roomId, sessionId, toast]);
+  }, [gameState.isOnline, gameState.roomId, toast]);
 
   // Toggle sound effects
   const handleToggleSound = () => {
@@ -676,113 +803,6 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       isOpen: true,
       type: 'join',
     });
-  };
-
-  // Create a new room
-  const createRoom = async (customRoomId?: string) => {
-    if (!sessionId) {
-      toast({
-        title: "Session Error",
-        description: "Could not create a room. Please try refreshing the page.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const roomId = customRoomId || generateRoomId();
-    const initialBoard = initializeChessBoard();
-    
-    try {
-      // Save the room to Supabase
-      const { error } = await supabase
-        .from('chess_rooms')
-        .insert({
-          id: roomId,
-          board_state: serializeBoard(initialBoard),
-          player_white: sessionId,
-          current_player: 'white',
-          game_status: 'playing',
-          history: serializeHistory([]),
-          timers: serializeTimers(DEFAULT_TIMERS)
-        });
-      
-      if (error) throw error;
-      
-      // Navigate to the room
-      navigate(`/room/${roomId}`);
-      
-      toast({
-        title: "Room Created",
-        description: `Room ID: ${roomId} - Share this with your opponent.`,
-      });
-    } catch (error) {
-      console.error('Error creating room:', error);
-      toast({
-        title: "Error Creating Room",
-        description: "Could not create the room. Please try again.",
-        variant: "destructive",
-      });
-    }
-    
-    setRoomModal({ isOpen: false, type: 'create' });
-  };
-
-  // Join an existing room
-  const joinRoom = async (roomId: string) => {
-    if (!roomId || roomId.length !== 6) {
-      toast({
-        title: "Invalid Room ID",
-        description: "Please enter a valid 6-character room ID.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!sessionId) {
-      toast({
-        title: "Session Error",
-        description: "Could not join the room. Please try refreshing the page.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      // Check if the room exists
-      const { data, error } = await supabase
-        .from('chess_rooms')
-        .select('*')
-        .eq('id', roomId)
-        .single();
-      
-      if (error) throw error;
-      
-      if (!data) {
-        toast({
-          title: "Room Not Found",
-          description: "The room you entered doesn't exist.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Navigate to the room
-      navigate(`/room/${roomId}`);
-      
-      toast({
-        title: "Room Joined",
-        description: `You've joined room ${roomId}.`,
-      });
-    } catch (error) {
-      console.error('Error joining room:', error);
-      toast({
-        title: "Error Joining Room",
-        description: "Could not join the room. Please try again.",
-        variant: "destructive",
-      });
-    }
-    
-    setRoomModal({ isOpen: false, type: 'join' });
   };
 
   // Close room modal

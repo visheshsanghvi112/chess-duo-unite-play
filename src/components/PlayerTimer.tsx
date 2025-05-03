@@ -22,6 +22,7 @@ const PlayerTimer: React.FC<PlayerTimerProps> = ({ timers, currentPlayer, gameSt
   const [blackTime, setBlackTime] = useState(timers.black);
 
   useEffect(() => {
+    // Update local state when props change (e.g., game restart)
     setWhiteTime(timers.white);
     setBlackTime(timers.black);
   }, [timers.white, timers.black]);
@@ -32,18 +33,17 @@ const PlayerTimer: React.FC<PlayerTimerProps> = ({ timers, currentPlayer, gameSt
     }
 
     const interval = setInterval(() => {
-      const now = Date.now();
-      const elapsed = timers.startTime ? Math.floor((now - timers.startTime) / 1000) : 0;
-      
       if (currentPlayer === 'white') {
-        setWhiteTime(Math.max(0, timers.white - elapsed));
+        // Only decrease time for the current player
+        setWhiteTime(prevTime => Math.max(0, prevTime - 1));
       } else {
-        setBlackTime(Math.max(0, timers.black - elapsed));
+        // Only decrease time for the current player
+        setBlackTime(prevTime => Math.max(0, prevTime - 1));
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timers, currentPlayer, gameStatus]);
+  }, [currentPlayer, gameStatus]);
 
   return (
     <div className="flex flex-col gap-2 mt-4">
