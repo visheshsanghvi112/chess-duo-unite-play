@@ -46,3 +46,29 @@ export interface GameMode {
   type: 'local' | 'online';
   roomId?: string;
 }
+
+// Helper functions to convert game types to/from JSON-compatible formats
+export const serializeBoard = (board: (Piece | null)[][]): any => {
+  return board;
+};
+
+export const deserializeBoard = (boardData: any): (Piece | null)[][] => {
+  if (!Array.isArray(boardData)) {
+    return initializeChessBoard();
+  }
+  return boardData;
+};
+
+export const serializeHistory = (history: Move[]): any => {
+  return history;
+};
+
+export const deserializeHistory = (historyData: any): Move[] => {
+  if (!Array.isArray(historyData)) {
+    return [];
+  }
+  return historyData;
+};
+
+// Import the necessary function
+import { initializeChessBoard } from '../utils/chessUtils';

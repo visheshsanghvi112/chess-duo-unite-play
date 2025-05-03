@@ -5,7 +5,10 @@ import GameInfo from './GameInfo';
 import PawnPromotionModal from './PawnPromotionModal';
 import RoomModal from './RoomModal';
 import LayoutControls from './LayoutControls';
-import { GameMode, GameState, GameStatus, Move, Piece, PieceColor, PieceType, Position } from '../types/chess';
+import { 
+  GameMode, GameState, GameStatus, Move, Piece, PieceColor, PieceType, Position,
+  serializeBoard, deserializeBoard, serializeHistory, deserializeHistory
+} from '../types/chess';
 import { cloneBoard, findKingPosition, generateRoomId, initializeChessBoard, isPawnPromotion } from '../utils/chessUtils';
 import { getValidMoves, isCheckmate, isInCheck, isStalemate } from '../utils/moveValidator';
 import { useToast } from "@/components/ui/use-toast";
@@ -114,13 +117,13 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             if (gameState.playerColor !== newData.current_player) {
               setGameState(prev => ({
                 ...prev,
-                board: newData.board_state,
-                currentPlayer: newData.current_player,
-                history: newData.history,
-                gameStatus: newData.game_status,
+                board: deserializeBoard(newData.board_state),
+                currentPlayer: newData.current_player as PieceColor,
+                history: deserializeHistory(newData.history),
+                gameStatus: newData.game_status as GameStatus,
                 check: {
                   inCheck: newData.game_status === 'check',
-                  kingPosition: findKingPosition(newData.board_state, newData.current_player),
+                  kingPosition: findKingPosition(deserializeBoard(newData.board_state), newData.current_player as PieceColor),
                 }
               }));
 
@@ -178,13 +181,16 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             setGameState(prev => ({
               ...prev,
               playerColor,
-              board: data.board_state || initializeChessBoard(),
-              currentPlayer: data.current_player,
-              history: data.history || [],
-              gameStatus: data.game_status,
+              board: deserializeBoard(data.board_state) || initializeChessBoard(),
+              currentPlayer: data.current_player as PieceColor,
+              history: deserializeHistory(data.history) || [],
+              gameStatus: data.game_status as GameStatus,
               check: {
                 inCheck: data.game_status === 'check',
-                kingPosition: findKingPosition(data.board_state || initializeChessBoard(), data.current_player),
+                kingPosition: findKingPosition(
+                  deserializeBoard(data.board_state) || initializeChessBoard(), 
+                  data.current_player as PieceColor
+                ),
               }
             }));
           }
@@ -340,8 +346,8 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
           await supabase
             .from('chess_rooms')
             .update({
-              board_state: newBoard,
-              history: [...history, newMove],
+              board_state: serializeBoard(newBoard),
+              history: serializeHistory([...history, newMove]),
               last_active: new Date().toISOString()
             })
             .eq('id', roomId);
@@ -420,10 +426,10 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         await supabase
           .from('chess_rooms')
           .update({
-            board_state: newBoard,
+            board_state: serializeBoard(newBoard),
             current_player: nextPlayer,
             game_status: gameStatus,
-            history: [...history, newMove],
+            history: serializeHistory([...history, newMove]),
             last_active: new Date().toISOString()
           })
           .eq('id', roomId);
@@ -497,9 +503,9 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
           await supabase
             .from('chess_rooms')
             .update({
-              board_state: newBoard,
+              board_state: serializeBoard(newBoard),
               game_status: gameStatus,
-              history: updatedHistory,
+              history: serializeHistory(updatedHistory),
               last_active: new Date().toISOString()
             })
             .eq('id', roomId);
@@ -519,7 +525,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
 
   // Restart game
   const handleRestart = async () => {
-    const newState = {
+    const newState: GameState = {
       board: initializeChessBoard(),
       currentPlayer: 'white',
       selectedPiece: null,
@@ -543,10 +549,10 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         await supabase
           .from('chess_rooms')
           .update({
-            board_state: newState.board,
+            board_state: serializeBoard(newState.board),
             current_player: newState.currentPlayer,
             game_status: newState.gameStatus,
-            history: newState.history,
+            history: serializeHistory(newState.history),
             last_active: new Date().toISOString()
           })
           .eq('id', gameState.roomId);
@@ -580,6 +586,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
   // Create a new room
   const createRoom = async (customRoomId?: string) => {
     const roomId = customRoomId || generateRoomId();
+    const initialBoard = initializeChessBoard();
     
     try {
       // Save the room to Supabase
@@ -587,10 +594,11 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         .from('chess_rooms')
         .insert({
           id: roomId,
-          board_state: initializeChessBoard(),
+          board_state: serializeBoard(initialBoard),
           player_white: 'anonymous',
           current_player: 'white',
-          game_status: 'playing'
+          game_status: 'playing',
+          history: serializeHistory([])
         });
       
       if (error) throw error;
