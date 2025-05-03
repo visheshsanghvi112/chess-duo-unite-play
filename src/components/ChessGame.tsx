@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import ChessBoard from './ChessBoard';
 import GameInfo from './GameInfo';
@@ -146,7 +145,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             if (gameState.playerColor !== newData.current_player) {
               const board = deserializeBoard(newData.board_state);
               const history = deserializeHistory(newData.history);
-              const timers = deserializeTimers(newData.timers);
+              const timers = deserializeTimers(newData.timers || { white: 600, black: 600 });
               
               setGameState(prev => ({
                 ...prev,
@@ -246,7 +245,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
           
           const board = deserializeBoard(data.board_state);
           const history = deserializeHistory(data.history);
-          const timers = deserializeTimers(data.timers) || DEFAULT_TIMERS;
+          const timers = deserializeTimers(data.timers || DEFAULT_TIMERS);
           
           // Update game state with room data
           setGameState(prev => ({

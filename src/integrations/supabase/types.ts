@@ -20,6 +20,7 @@ export type Database = {
           last_active: string
           player_black: string | null
           player_white: string | null
+          timers: Json | null
         }
         Insert: {
           board_state?: Json | null
@@ -31,6 +32,7 @@ export type Database = {
           last_active?: string
           player_black?: string | null
           player_white?: string | null
+          timers?: Json | null
         }
         Update: {
           board_state?: Json | null
@@ -42,6 +44,7 @@ export type Database = {
           last_active?: string
           player_black?: string | null
           player_white?: string | null
+          timers?: Json | null
         }
         Relationships: []
       }
