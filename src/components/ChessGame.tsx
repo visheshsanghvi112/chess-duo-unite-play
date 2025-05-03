@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import ChessBoard from './ChessBoard';
 import GameInfo from './GameInfo';
@@ -9,6 +10,8 @@ import { cloneBoard, findKingPosition, generateRoomId, initializeChessBoard, isP
 import { getValidMoves, isCheckmate, isInCheck, isStalemate } from '../utils/moveValidator';
 import { useToast } from "@/components/ui/use-toast";
 import { playSound, setSoundMuted } from '../utils/soundUtils';
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from 'react-router-dom';
 
 interface ChessGameProps {
   initialMode?: GameMode;
@@ -16,6 +19,7 @@ interface ChessGameProps {
 
 const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   
   // Layout settings
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -88,6 +92,115 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+
+  // Setup realtime subscription for online games
+  useEffect(() => {
+    if (!gameState.isOnline || !gameState.roomId) return;
+
+    // Subscribe to room updates
+    const channel = supabase
+      .channel('chess_room_' + gameState.roomId)
+      .on('postgres_changes', 
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'chess_rooms',
+          filter: `id=eq.${gameState.roomId}`
+        }, 
+        (payload) => {
+          const newData = payload.new;
+          if (newData) {
+            // Only update if it's the opponent's move
+            if (gameState.playerColor !== newData.current_player) {
+              setGameState(prev => ({
+                ...prev,
+                board: newData.board_state,
+                currentPlayer: newData.current_player,
+                history: newData.history,
+                gameStatus: newData.game_status,
+                check: {
+                  inCheck: newData.game_status === 'check',
+                  kingPosition: findKingPosition(newData.board_state, newData.current_player),
+                }
+              }));
+
+              // Play appropriate sound based on game status
+              if (newData.game_status === 'check') {
+                playSound('check');
+              } else if (newData.game_status === 'checkmate') {
+                playSound('checkmate');
+              } else if (newData.game_status === 'stalemate') {
+                playSound('draw');
+              } else {
+                const lastMove = newData.history[newData.history.length - 1];
+                if (lastMove && lastMove.capturedPiece) {
+                  playSound('capture');
+                } else {
+                  playSound('move');
+                }
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [gameState.isOnline, gameState.roomId, gameState.playerColor]);
+
+  // Initialize online game from Supabase if roomId is provided
+  useEffect(() => {
+    const loadRoom = async () => {
+      if (!gameState.isOnline || !gameState.roomId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('chess_rooms')
+          .select('*')
+          .eq('id', gameState.roomId)
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          // If joining an existing game, set player color to black
+          if (!gameState.playerColor) {
+            const playerColor: PieceColor = 'black';
+            
+            // Update room with player_black
+            await supabase
+              .from('chess_rooms')
+              .update({ player_black: 'anonymous' })
+              .eq('id', gameState.roomId);
+            
+            setGameState(prev => ({
+              ...prev,
+              playerColor,
+              board: data.board_state || initializeChessBoard(),
+              currentPlayer: data.current_player,
+              history: data.history || [],
+              gameStatus: data.game_status,
+              check: {
+                inCheck: data.game_status === 'check',
+                kingPosition: findKingPosition(data.board_state || initializeChessBoard(), data.current_player),
+              }
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading room:', error);
+        toast({
+          title: "Error Loading Game",
+          description: "Could not load the game room. Please try again.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    loadRoom();
+  }, [gameState.isOnline, gameState.roomId, gameState.playerColor, toast]);
 
   // Toggle sound effects
   const handleToggleSound = () => {
@@ -180,8 +293,8 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
   };
 
   // Make a move
-  const makeMove = (from: Position, to: Position) => {
-    const { board, currentPlayer, history } = gameState;
+  const makeMove = async (from: Position, to: Position) => {
+    const { board, currentPlayer, history, isOnline, roomId } = gameState;
     const newBoard = cloneBoard(board);
     
     const piece = newBoard[from.y][from.x];
@@ -220,6 +333,22 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         validMoves: [],
         history: [...history, newMove],
       }));
+      
+      // If online, update the room
+      if (isOnline && roomId) {
+        try {
+          await supabase
+            .from('chess_rooms')
+            .update({
+              board_state: newBoard,
+              history: [...history, newMove],
+              last_active: new Date().toISOString()
+            })
+            .eq('id', roomId);
+        } catch (error) {
+          console.error('Error updating game state:', error);
+        }
+      }
       
       return;
     }
@@ -284,13 +413,31 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         kingPosition,
       },
     }));
+    
+    // If online, update the room
+    if (isOnline && roomId) {
+      try {
+        await supabase
+          .from('chess_rooms')
+          .update({
+            board_state: newBoard,
+            current_player: nextPlayer,
+            game_status: gameStatus,
+            history: [...history, newMove],
+            last_active: new Date().toISOString()
+          })
+          .eq('id', roomId);
+      } catch (error) {
+        console.error('Error updating game state:', error);
+      }
+    }
   };
 
   // Handle pawn promotion
-  const handlePawnPromotion = (position: Position, pieceType: PieceType) => {
+  const handlePawnPromotion = async (position: Position, pieceType: PieceType) => {
     if (!position || !pawnPromotion.position) return;
     
-    const { board, history } = gameState;
+    const { board, history, isOnline, roomId } = gameState;
     const newBoard = cloneBoard(board);
     
     // Get the last move from history which should be the pawn move
@@ -343,6 +490,23 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
           kingPosition,
         },
       }));
+      
+      // If online, update the room
+      if (isOnline && roomId) {
+        try {
+          await supabase
+            .from('chess_rooms')
+            .update({
+              board_state: newBoard,
+              game_status: gameStatus,
+              history: updatedHistory,
+              last_active: new Date().toISOString()
+            })
+            .eq('id', roomId);
+        } catch (error) {
+          console.error('Error updating game state:', error);
+        }
+      }
     }
     
     // Close the promotion modal
@@ -354,8 +518,8 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
   };
 
   // Restart game
-  const handleRestart = () => {
-    setGameState({
+  const handleRestart = async () => {
+    const newState = {
       board: initializeChessBoard(),
       currentPlayer: 'white',
       selectedPiece: null,
@@ -369,7 +533,27 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       isOnline: gameState.isOnline,
       roomId: gameState.roomId,
       playerColor: gameState.playerColor,
-    });
+    };
+    
+    setGameState(newState);
+    
+    // If online, update the room
+    if (gameState.isOnline && gameState.roomId) {
+      try {
+        await supabase
+          .from('chess_rooms')
+          .update({
+            board_state: newState.board,
+            current_player: newState.currentPlayer,
+            game_status: newState.gameStatus,
+            history: newState.history,
+            last_active: new Date().toISOString()
+          })
+          .eq('id', gameState.roomId);
+      } catch (error) {
+        console.error('Error restarting game:', error);
+      }
+    }
     
     toast({
       title: "New Game Started",
@@ -394,37 +578,44 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
   };
 
   // Create a new room
-  const createRoom = (customRoomId?: string) => {
+  const createRoom = async (customRoomId?: string) => {
     const roomId = customRoomId || generateRoomId();
     
-    setGameState({
-      board: initializeChessBoard(),
-      currentPlayer: 'white',
-      selectedPiece: null,
-      validMoves: [],
-      gameStatus: 'playing',
-      history: [],
-      check: {
-        inCheck: false,
-        kingPosition: null,
-      },
-      isOnline: true,
-      roomId,
-      playerColor: 'white', // Creator is white
-    });
+    try {
+      // Save the room to Supabase
+      const { error } = await supabase
+        .from('chess_rooms')
+        .insert({
+          id: roomId,
+          board_state: initializeChessBoard(),
+          player_white: 'anonymous',
+          current_player: 'white',
+          game_status: 'playing'
+        });
+      
+      if (error) throw error;
+      
+      // Navigate to the room
+      navigate(`/room/${roomId}`);
+      
+      toast({
+        title: "Room Created",
+        description: `Room ID: ${roomId} - Share this with your opponent.`,
+      });
+    } catch (error) {
+      console.error('Error creating room:', error);
+      toast({
+        title: "Error Creating Room",
+        description: "Could not create the room. Please try again.",
+        variant: "destructive",
+      });
+    }
     
     setRoomModal({ isOpen: false, type: 'create' });
-    
-    toast({
-      title: "Room Created",
-      description: `Room ID: ${roomId} - Share this with your opponent.`,
-    });
-    
-    // In a real app, we would establish a WebSocket connection here
   };
 
   // Join an existing room
-  const joinRoom = (roomId: string) => {
+  const joinRoom = async (roomId: string) => {
     if (!roomId || roomId.length !== 6) {
       toast({
         title: "Invalid Room ID",
@@ -434,32 +625,42 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       return;
     }
     
-    // In a real app, we would validate the room exists here via API call
-    
-    setGameState({
-      board: initializeChessBoard(),
-      currentPlayer: 'white',
-      selectedPiece: null,
-      validMoves: [],
-      gameStatus: 'playing',
-      history: [],
-      check: {
-        inCheck: false,
-        kingPosition: null,
-      },
-      isOnline: true,
-      roomId,
-      playerColor: 'black', // Joiner is black
-    });
+    try {
+      // Check if the room exists
+      const { data, error } = await supabase
+        .from('chess_rooms')
+        .select('*')
+        .eq('id', roomId)
+        .single();
+      
+      if (error) throw error;
+      
+      if (!data) {
+        toast({
+          title: "Room Not Found",
+          description: "The room you entered doesn't exist.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Navigate to the room
+      navigate(`/room/${roomId}`);
+      
+      toast({
+        title: "Room Joined",
+        description: `You've joined room ${roomId} as black.`,
+      });
+    } catch (error) {
+      console.error('Error joining room:', error);
+      toast({
+        title: "Error Joining Room",
+        description: "Could not join the room. Please try again.",
+        variant: "destructive",
+      });
+    }
     
     setRoomModal({ isOpen: false, type: 'join' });
-    
-    toast({
-      title: "Room Joined",
-      description: `You've joined room ${roomId} as black.`,
-    });
-    
-    // In a real app, we would establish a WebSocket connection here
   };
 
   // Close room modal

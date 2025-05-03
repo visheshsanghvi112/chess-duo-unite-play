@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -210,4 +209,25 @@
 
 .animate-move-hint {
   animation: moveHint 1.5s ease-in-out infinite;
+}
+
+/* Make sure chess board has proper grid layout */
+.chess-board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  aspect-ratio: 1/1;
+}
+
+/* Update fullscreen styles to focus on the game in fullscreen mode */
+@media (display-mode: fullscreen) {
+  .chess-board-container {
+    max-height: 85vh;
+    margin: 0 auto;
+  }
+}
+
+/* Ensure board squares are perfect squares */
+.chess-square {
+  aspect-ratio: 1/1;
 }

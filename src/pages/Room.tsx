@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { supabase } from '@/integrations/supabase/client';
 
 const Room = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -15,17 +16,36 @@ const Room = () => {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    // In a real app, we would validate the room exists here via API call
-    if (roomId && roomId.length === 6) {
-      setIsValid(true);
-    } else {
-      setIsValid(false);
-      toast({
-        title: "Invalid Room",
-        description: "The room ID is invalid or doesn't exist.",
-        variant: "destructive",
-      });
-    }
+    const checkRoom = async () => {
+      if (!roomId) {
+        setIsValid(false);
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabase
+          .from('chess_rooms')
+          .select('id')
+          .eq('id', roomId)
+          .single();
+        
+        if (error || !data) {
+          setIsValid(false);
+          toast({
+            title: "Invalid Room",
+            description: "The room ID is invalid or doesn't exist.",
+            variant: "destructive",
+          });
+        } else {
+          setIsValid(true);
+        }
+      } catch (err) {
+        console.error("Error checking room:", err);
+        setIsValid(false);
+      }
+    };
+    
+    checkRoom();
   }, [roomId, toast]);
 
   const handleBack = () => {
@@ -65,7 +85,7 @@ const Room = () => {
         )}
         
         <footer className="mt-6 text-center text-xs sm:text-sm text-muted-foreground">
-          <p>© 2025 Chess Duo - All rights reserved</p>
+          <p>© 2025 Chess Duo - Created by <a href="https://visheshsanghvi.me/" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Vishesh Sanghvi</a></p>
         </footer>
       </div>
     </div>

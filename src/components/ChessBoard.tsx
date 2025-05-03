@@ -29,14 +29,15 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
     );
   };
 
-  // Generate the board, potentially flipped for black perspective
+  // Generate the board, properly flipped when needed
   const renderBoard = () => {
     const elements = [];
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        // Adjust coordinates if the board is flipped
-        const displayX = flipped ? 7 - x : x;
-        const displayY = flipped ? 7 - y : y;
+    
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        // Convert logical positions to board display positions based on flipped state
+        const displayY = flipped ? 7 - row : row;
+        const displayX = flipped ? 7 - col : col;
         
         const position = { x: displayX, y: displayY };
         const piece = board[displayY][displayX];
@@ -65,14 +66,14 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
     const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
     
-    // Flip if needed
+    // Flip labels as needed
     const displayFiles = flipped ? [...files].reverse() : files;
     const displayRanks = flipped ? [...ranks].reverse() : ranks;
 
     if (isMobile) {
       // Simplified labels for mobile
       return (
-        <div className="flex-1 chess-board">
+        <div className="flex-1 grid grid-cols-8 grid-rows-8">
           {renderBoard()}
         </div>
       );
@@ -99,7 +100,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
             ))}
           </div>
           
-          <div className="flex-1 chess-board">
+          <div className="flex-1 grid grid-cols-8 grid-rows-8">
             {renderBoard()}
           </div>
           
@@ -128,6 +129,10 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
   return (
     <div className="chess-board-container max-w-full w-full">
       {renderBoardLabels()}
+      
+      <div className="mt-2 text-center text-sm">
+        {flipped ? "Playing as Black" : "Playing as White"}
+      </div>
     </div>
   );
 };
