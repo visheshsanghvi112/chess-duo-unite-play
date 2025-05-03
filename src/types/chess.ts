@@ -24,6 +24,12 @@ export interface Move {
   isEnPassant?: boolean;
 }
 
+export interface PlayerTimer {
+  white: number; // time in seconds
+  black: number; // time in seconds
+  startTime?: number; // timestamp when current player's timer started
+}
+
 export interface GameState {
   board: (Piece | null)[][];
   currentPlayer: PieceColor;
@@ -38,6 +44,11 @@ export interface GameState {
   roomId?: string;
   isOnline: boolean;
   playerColor?: PieceColor;
+  players?: {
+    white?: string;
+    black?: string;
+  };
+  timers?: PlayerTimer;
 }
 
 export type GameStatus = 'playing' | 'check' | 'checkmate' | 'stalemate' | 'draw';
@@ -68,6 +79,21 @@ export const deserializeHistory = (historyData: any): Move[] => {
     return [];
   }
   return historyData;
+};
+
+export const serializeTimers = (timers: PlayerTimer): any => {
+  return timers;
+};
+
+export const deserializeTimers = (timersData: any): PlayerTimer => {
+  if (!timersData || typeof timersData !== 'object') {
+    return { white: 600, black: 600 }; // Default 10 minutes per player
+  }
+  return {
+    white: timersData.white || 600,
+    black: timersData.black || 600,
+    startTime: timersData.startTime
+  };
 };
 
 // Import the necessary function

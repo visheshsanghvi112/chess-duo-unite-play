@@ -5,9 +5,10 @@ import GameInfo from './GameInfo';
 import PawnPromotionModal from './PawnPromotionModal';
 import RoomModal from './RoomModal';
 import LayoutControls from './LayoutControls';
+import PlayerTimer from './PlayerTimer';
 import { 
-  GameMode, GameState, GameStatus, Move, Piece, PieceColor, PieceType, Position,
-  serializeBoard, deserializeBoard, serializeHistory, deserializeHistory
+  GameMode, GameState, GameStatus, Move, Piece, PieceColor, PieceType, Position, PlayerTimer as PlayerTimerType,
+  serializeBoard, deserializeBoard, serializeHistory, deserializeHistory, serializeTimers, deserializeTimers
 } from '../types/chess';
 import { cloneBoard, findKingPosition, generateRoomId, initializeChessBoard, isPawnPromotion } from '../utils/chessUtils';
 import { getValidMoves, isCheckmate, isInCheck, isStalemate } from '../utils/moveValidator';
@@ -19,6 +20,13 @@ import { useNavigate } from 'react-router-dom';
 interface ChessGameProps {
   initialMode?: GameMode;
 }
+
+// Default timers - 10 minutes per player
+const DEFAULT_TIMERS: PlayerTimerType = {
+  white: 600, // 10 minutes in seconds
+  black: 600,
+  startTime: Date.now()
+};
 
 const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }) => {
   const { toast } = useToast();
@@ -46,8 +54,29 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     },
     isOnline: initialMode.type === 'online',
     roomId: initialMode.roomId,
-    playerColor: initialMode.type === 'online' ? 'white' : undefined,
+    playerColor: initialMode.type === 'online' ? undefined : undefined, // Will be set later for online games
+    players: {
+      white: undefined,
+      black: undefined
+    },
+    timers: DEFAULT_TIMERS
   });
+
+  // Session ID for player identification
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // Initialize session ID on component mount
+  useEffect(() => {
+    // Try to get existing session ID from localStorage or generate a new one
+    const existingSessionId = localStorage.getItem('chessSessionId');
+    const newSessionId = existingSessionId || `player_${Math.random().toString(36).substring(2, 15)}`;
+    
+    if (!existingSessionId) {
+      localStorage.setItem('chessSessionId', newSessionId);
+    }
+    
+    setSessionId(newSessionId);
+  }, []);
 
   // Modals
   const [pawnPromotion, setPawnPromotion] = useState<{
@@ -115,15 +144,27 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
           if (newData) {
             // Only update if it's the opponent's move
             if (gameState.playerColor !== newData.current_player) {
+              const board = deserializeBoard(newData.board_state);
+              const history = deserializeHistory(newData.history);
+              const timers = deserializeTimers(newData.timers);
+              
               setGameState(prev => ({
                 ...prev,
-                board: deserializeBoard(newData.board_state),
+                board: board,
                 currentPlayer: newData.current_player as PieceColor,
-                history: deserializeHistory(newData.history),
+                history: history,
                 gameStatus: newData.game_status as GameStatus,
                 check: {
                   inCheck: newData.game_status === 'check',
-                  kingPosition: findKingPosition(deserializeBoard(newData.board_state), newData.current_player as PieceColor),
+                  kingPosition: findKingPosition(board, newData.current_player as PieceColor),
+                },
+                players: {
+                  white: newData.player_white || prev.players?.white,
+                  black: newData.player_black || prev.players?.black
+                },
+                timers: {
+                  ...timers,
+                  startTime: Date.now() // Reset timer start time when receiving move
                 }
               }));
 
@@ -135,7 +176,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
               } else if (newData.game_status === 'stalemate') {
                 playSound('draw');
               } else {
-                const lastMove = newData.history[newData.history.length - 1];
+                const lastMove = history[history.length - 1];
                 if (lastMove && lastMove.capturedPiece) {
                   playSound('capture');
                 } else {
@@ -156,7 +197,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
   // Initialize online game from Supabase if roomId is provided
   useEffect(() => {
     const loadRoom = async () => {
-      if (!gameState.isOnline || !gameState.roomId) return;
+      if (!gameState.isOnline || !gameState.roomId || !sessionId) return;
 
       try {
         const { data, error } = await supabase
@@ -168,32 +209,63 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         if (error) throw error;
 
         if (data) {
-          // If joining an existing game, set player color to black
-          if (!gameState.playerColor) {
-            const playerColor: PieceColor = 'black';
-            
-            // Update room with player_black
+          let playerColor: PieceColor | undefined = undefined;
+          let updateNeeded = false;
+          let updateData: any = {};
+          
+          // Check if this player is already registered as white or black
+          if (data.player_white === sessionId) {
+            playerColor = 'white';
+          } else if (data.player_black === sessionId) {
+            playerColor = 'black';
+          } else if (!data.player_white) {
+            // Join as white if available
+            playerColor = 'white';
+            updateNeeded = true;
+            updateData.player_white = sessionId;
+          } else if (!data.player_black) {
+            // Join as black if available
+            playerColor = 'black';
+            updateNeeded = true;
+            updateData.player_black = sessionId;
+          } else {
+            // Room is full, join as spectator
+            toast({
+              title: "Room Full",
+              description: "You've joined as a spectator as both players are already in the game.",
+            });
+          }
+          
+          // Update the room with player info if needed
+          if (updateNeeded) {
             await supabase
               .from('chess_rooms')
-              .update({ player_black: 'anonymous' })
+              .update(updateData)
               .eq('id', gameState.roomId);
-            
-            setGameState(prev => ({
-              ...prev,
-              playerColor,
-              board: deserializeBoard(data.board_state) || initializeChessBoard(),
-              currentPlayer: data.current_player as PieceColor,
-              history: deserializeHistory(data.history) || [],
-              gameStatus: data.game_status as GameStatus,
-              check: {
-                inCheck: data.game_status === 'check',
-                kingPosition: findKingPosition(
-                  deserializeBoard(data.board_state) || initializeChessBoard(), 
-                  data.current_player as PieceColor
-                ),
-              }
-            }));
           }
+          
+          const board = deserializeBoard(data.board_state);
+          const history = deserializeHistory(data.history);
+          const timers = deserializeTimers(data.timers) || DEFAULT_TIMERS;
+          
+          // Update game state with room data
+          setGameState(prev => ({
+            ...prev,
+            playerColor,
+            board: board,
+            currentPlayer: data.current_player as PieceColor,
+            history: history,
+            gameStatus: data.game_status as GameStatus,
+            check: {
+              inCheck: data.game_status === 'check',
+              kingPosition: findKingPosition(board, data.current_player as PieceColor),
+            },
+            players: {
+              white: data.player_white,
+              black: data.player_black
+            },
+            timers: timers
+          }));
         }
       } catch (error) {
         console.error('Error loading room:', error);
@@ -206,7 +278,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     };
 
     loadRoom();
-  }, [gameState.isOnline, gameState.roomId, gameState.playerColor, toast]);
+  }, [gameState.isOnline, gameState.roomId, sessionId, toast]);
 
   // Toggle sound effects
   const handleToggleSound = () => {
@@ -300,13 +372,29 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
 
   // Make a move
   const makeMove = async (from: Position, to: Position) => {
-    const { board, currentPlayer, history, isOnline, roomId } = gameState;
+    const { board, currentPlayer, history, isOnline, roomId, timers } = gameState;
     const newBoard = cloneBoard(board);
     
     const piece = newBoard[from.y][from.x];
     const capturedPiece = newBoard[to.y][to.x];
     
     if (!piece) return;
+    
+    // Update timers - save current player's remaining time
+    let updatedTimers = { ...timers };
+    if (updatedTimers) {
+      const now = Date.now();
+      const elapsed = updatedTimers.startTime ? Math.floor((now - updatedTimers.startTime) / 1000) : 0;
+      
+      if (currentPlayer === 'white') {
+        updatedTimers.white = Math.max(0, updatedTimers.white - elapsed);
+      } else {
+        updatedTimers.black = Math.max(0, updatedTimers.black - elapsed);
+      }
+      
+      // Set start time for next player's turn
+      updatedTimers.startTime = now;
+    }
     
     // Check for pawn promotion
     if (piece.type === 'pawn' && isPawnPromotion(piece, to)) {
@@ -338,6 +426,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         selectedPiece: null,
         validMoves: [],
         history: [...history, newMove],
+        timers: updatedTimers
       }));
       
       // If online, update the room
@@ -348,6 +437,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             .update({
               board_state: serializeBoard(newBoard),
               history: serializeHistory([...history, newMove]),
+              timers: serializeTimers(updatedTimers),
               last_active: new Date().toISOString()
             })
             .eq('id', roomId);
@@ -418,6 +508,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         inCheck,
         kingPosition,
       },
+      timers: updatedTimers
     }));
     
     // If online, update the room
@@ -430,6 +521,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             current_player: nextPlayer,
             game_status: gameStatus,
             history: serializeHistory([...history, newMove]),
+            timers: serializeTimers(updatedTimers),
             last_active: new Date().toISOString()
           })
           .eq('id', roomId);
@@ -443,7 +535,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
   const handlePawnPromotion = async (position: Position, pieceType: PieceType) => {
     if (!position || !pawnPromotion.position) return;
     
-    const { board, history, isOnline, roomId } = gameState;
+    const { board, history, isOnline, roomId, timers } = gameState;
     const newBoard = cloneBoard(board);
     
     // Get the last move from history which should be the pawn move
@@ -506,6 +598,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
               board_state: serializeBoard(newBoard),
               game_status: gameStatus,
               history: serializeHistory(updatedHistory),
+              timers: serializeTimers(timers || DEFAULT_TIMERS),
               last_active: new Date().toISOString()
             })
             .eq('id', roomId);
@@ -539,6 +632,8 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       isOnline: gameState.isOnline,
       roomId: gameState.roomId,
       playerColor: gameState.playerColor,
+      players: gameState.players,
+      timers: DEFAULT_TIMERS
     };
     
     setGameState(newState);
@@ -553,6 +648,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             current_player: newState.currentPlayer,
             game_status: newState.gameStatus,
             history: serializeHistory(newState.history),
+            timers: serializeTimers(DEFAULT_TIMERS),
             last_active: new Date().toISOString()
           })
           .eq('id', gameState.roomId);
@@ -585,6 +681,15 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
 
   // Create a new room
   const createRoom = async (customRoomId?: string) => {
+    if (!sessionId) {
+      toast({
+        title: "Session Error",
+        description: "Could not create a room. Please try refreshing the page.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const roomId = customRoomId || generateRoomId();
     const initialBoard = initializeChessBoard();
     
@@ -595,10 +700,11 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
         .insert({
           id: roomId,
           board_state: serializeBoard(initialBoard),
-          player_white: 'anonymous',
+          player_white: sessionId,
           current_player: 'white',
           game_status: 'playing',
-          history: serializeHistory([])
+          history: serializeHistory([]),
+          timers: serializeTimers(DEFAULT_TIMERS)
         });
       
       if (error) throw error;
@@ -633,6 +739,15 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       return;
     }
     
+    if (!sessionId) {
+      toast({
+        title: "Session Error",
+        description: "Could not join the room. Please try refreshing the page.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       // Check if the room exists
       const { data, error } = await supabase
@@ -657,7 +772,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       
       toast({
         title: "Room Joined",
-        description: `You've joined room ${roomId} as black.`,
+        description: `You've joined room ${roomId}.`,
       });
     } catch (error) {
       console.error('Error joining room:', error);
@@ -676,26 +791,32 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     setRoomModal({ ...roomModal, isOpen: false });
   };
 
-  // Determine the container classes based on layout
-  const containerClasses = layoutType === 'horizontal'
+  // Determine the container classes based on layout and fullscreen
+  const containerClasses = isFullscreen
+    ? "grid grid-cols-1 gap-6"
+    : layoutType === 'horizontal'
     ? "grid grid-cols-1 md:grid-cols-3 gap-6"
     : "grid grid-cols-1 gap-6";
 
   // Determine the board container classes based on layout
-  const boardContainerClasses = layoutType === 'horizontal'
+  const boardContainerClasses = isFullscreen 
+    ? ""
+    : layoutType === 'horizontal'
     ? "md:col-span-2"
     : "";
 
   return (
     <div className={`max-w-6xl mx-auto px-4 ${isFullscreen ? 'fixed inset-0 z-50 bg-background p-4 overflow-auto' : ''}`}>
-      <LayoutControls
-        isFullscreen={isFullscreen}
-        layoutType={layoutType}
-        showGameInfo={showGameInfo}
-        onToggleFullscreen={toggleFullscreen}
-        onChangeLayout={(layout) => setLayoutType(layout)}
-        onToggleGameInfo={() => setShowGameInfo(!showGameInfo)}
-      />
+      {!isFullscreen && (
+        <LayoutControls
+          isFullscreen={isFullscreen}
+          layoutType={layoutType}
+          showGameInfo={showGameInfo}
+          onToggleFullscreen={toggleFullscreen}
+          onChangeLayout={(layout) => setLayoutType(layout)}
+          onToggleGameInfo={() => setShowGameInfo(!showGameInfo)}
+        />
+      )}
       
       <div className={containerClasses}>
         <div className={boardContainerClasses}>
@@ -704,9 +825,32 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             onSquareClick={handleSquareClick}
             flipped={gameState.isOnline && gameState.playerColor === 'black'}
           />
+          
+          {/* Timer display - Always show in fullscreen mode or when game info is hidden */}
+          {(isFullscreen || !showGameInfo) && gameState.timers && (
+            <div className="mt-4">
+              <PlayerTimer 
+                timers={gameState.timers}
+                currentPlayer={gameState.currentPlayer}
+                gameStatus={gameState.gameStatus}
+                isPlayerTurn={gameState.playerColor === gameState.currentPlayer}
+              />
+            </div>
+          )}
+          
+          {isFullscreen && (
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={toggleFullscreen}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
+              >
+                Exit Fullscreen
+              </button>
+            </div>
+          )}
         </div>
         
-        {showGameInfo && (
+        {showGameInfo && !isFullscreen && (
           <div>
             <GameInfo 
               gameState={gameState}
@@ -716,6 +860,15 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
               soundEnabled={soundEnabled}
               onToggleSound={handleToggleSound}
             />
+            
+            {gameState.timers && (
+              <PlayerTimer 
+                timers={gameState.timers}
+                currentPlayer={gameState.currentPlayer}
+                gameStatus={gameState.gameStatus}
+                isPlayerTurn={gameState.playerColor === gameState.currentPlayer}
+              />
+            )}
           </div>
         )}
       </div>
