@@ -1,10 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
-import { PlayerTimer } from '@/types/chess';
+import type { PlayerTimer as PlayerTimerType } from '@/types/chess';
 
 interface PlayerTimerProps {
-  timers: PlayerTimer;
+  timers: PlayerTimerType;
   currentPlayer: 'white' | 'black';
   gameStatus: string;
   isPlayerTurn: boolean;
