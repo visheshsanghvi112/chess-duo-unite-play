@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import ChessBoard from './ChessBoard';
 import GameInfo from './GameInfo';
@@ -15,7 +16,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { playSound, setSoundMuted } from '../utils/soundUtils';
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from 'react-router-dom';
-import { crypto } from 'crypto';
 
 interface ChessGameProps {
   initialMode?: GameMode;
@@ -26,6 +26,15 @@ const DEFAULT_TIMERS: PlayerTimerType = {
   white: 600, // 10 minutes in seconds
   black: 600,
   startTime: Date.now()
+};
+
+// Function to generate a unique UUID for player IDs
+const generateUUID = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 };
 
 const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }) => {
@@ -209,9 +218,8 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
     const initialBoard = initializeChessBoard();
     
     try {
-      // Generate a proper UUID for player IDs
-      // Supabase expects UUIDs for auth.users references
-      const playerUUID = crypto.randomUUID();
+      // Generate a browser-compatible UUID for player IDs
+      const playerUUID = generateUUID();
       
       // Save the room to Supabase
       const { error } = await supabase
@@ -228,7 +236,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       
       if (error) throw error;
       
-      // Store the UUID in sessionStorage for persistence
+      // Store the UUID in localStorage for persistence
       localStorage.setItem('chessPlayerUUID', playerUUID);
       
       // Navigate to the room
@@ -294,7 +302,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       
       // If not, generate a new UUID for this player
       if (!playerUUID) {
-        playerUUID = crypto.randomUUID();
+        playerUUID = generateUUID();
         localStorage.setItem('chessPlayerUUID', playerUUID);
       }
       
