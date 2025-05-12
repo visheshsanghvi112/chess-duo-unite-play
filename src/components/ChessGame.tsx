@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import ChessBoard from './ChessBoard';
 import GameInfo from './GameInfo';
@@ -16,10 +15,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { playSound, setSoundMuted } from '../utils/soundUtils';
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from 'react-router-dom';
-
-interface ChessGameProps {
-  initialMode?: GameMode;
-}
+import { BoardTheme } from './BoardThemeSelector';
 
 // Default timers - 10 minutes per player
 const DEFAULT_TIMERS: PlayerTimerType = {
@@ -45,6 +41,9 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [layoutType, setLayoutType] = useState<'horizontal' | 'vertical'>('horizontal');
   const [showGameInfo, setShowGameInfo] = useState(true);
+  
+  // Theme and visual settings
+  const [boardTheme, setBoardTheme] = useState<BoardTheme>('tournament');
   
   // Sound settings
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -425,6 +424,26 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
       description: newSoundState ? "Game sounds are now on" : "Game sounds are now off",
     });
   };
+
+  // Handle board theme change
+  const handleChangeBoardTheme = (theme: BoardTheme) => {
+    setBoardTheme(theme);
+    // Save preference to localStorage
+    localStorage.setItem('chessBoardTheme', theme);
+    
+    toast({
+      title: "Board Theme Changed",
+      description: `Theme set to ${theme.charAt(0).toUpperCase() + theme.slice(1)}`,
+    });
+  };
+
+  // Load saved board theme from localStorage on component mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('chessBoardTheme') as BoardTheme | null;
+    if (savedTheme) {
+      setBoardTheme(savedTheme);
+    }
+  }, []);
 
   // Handle square click
   const handleSquareClick = (position: Position) => {
@@ -851,6 +870,7 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
             gameState={gameState}
             onSquareClick={handleSquareClick}
             flipped={gameState.isOnline && gameState.playerColor === 'black'}
+            boardTheme={boardTheme}
           />
           
           {/* Timer display - Always show in fullscreen mode or when game info is hidden */}
@@ -886,6 +906,8 @@ const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }
               onJoinRoom={handleJoinRoom}
               soundEnabled={soundEnabled}
               onToggleSound={handleToggleSound}
+              boardTheme={boardTheme}
+              onChangeBoardTheme={handleChangeBoardTheme}
             />
             
             {gameState.timers && (

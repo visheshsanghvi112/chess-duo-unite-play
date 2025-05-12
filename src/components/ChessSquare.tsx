@@ -2,6 +2,8 @@
 import React from 'react';
 import { Piece, Position } from '../types/chess';
 import ChessPiece from './ChessPiece';
+import { getSquareClassName } from '../utils/themeUtils';
+import { BoardTheme } from './BoardThemeSelector';
 
 interface ChessSquareProps {
   position: Position;
@@ -9,6 +11,7 @@ interface ChessSquareProps {
   isSelected: boolean;
   isValidMove: boolean;
   isCheck: boolean;
+  boardTheme: BoardTheme;
   onSquareClick: (position: Position) => void;
 }
 
@@ -18,21 +21,15 @@ const ChessSquare: React.FC<ChessSquareProps> = ({
   isSelected,
   isValidMove,
   isCheck,
+  boardTheme,
   onSquareClick,
 }) => {
   const { x, y } = position;
-  const isDark = (x + y) % 2 === 0;
+  const isDark = (x + y) % 2 === 1; // Updated to make sure a1 is dark
   
-  const getSquareClasses = () => {
-    const baseClass = `chess-square ${isDark ? 'chess-square-dark' : 'chess-square-light'}`;
-    const stateClasses = [
-      isSelected && 'chess-square-selected',
-      isValidMove && 'chess-square-move',
-      isCheck && 'chess-square-check',
-    ].filter(Boolean).join(' ');
-    
-    return `${baseClass} ${stateClasses}`;
-  };
+  const squareClasses = `chess-square relative aspect-square flex items-center justify-center ${
+    getSquareClassName(isDark, boardTheme, isSelected, isValidMove, isCheck)
+  }`;
 
   const handleClick = () => {
     onSquareClick(position);
@@ -40,13 +37,23 @@ const ChessSquare: React.FC<ChessSquareProps> = ({
 
   return (
     <div 
-      className={getSquareClasses()}
+      className={squareClasses}
       onClick={handleClick}
       data-position={`${x},${y}`}
     >
-      {piece && <ChessPiece piece={piece} />}
-      {isValidMove && !piece && (
-        <div className="h-3/5 w-3/5 rounded-full bg-chess-move-highlight opacity-60 z-10" />
+      {piece && <ChessPiece piece={piece} isDragging={isSelected} />}
+      
+      {/* File and rank labels on the edge squares */}
+      {x === 0 && (
+        <div className="absolute left-1 top-1 text-xs opacity-60 pointer-events-none">
+          {8 - y}
+        </div>
+      )}
+      
+      {y === 7 && (
+        <div className="absolute right-1 bottom-1 text-xs opacity-60 pointer-events-none">
+          {String.fromCharCode(97 + x)}
+        </div>
       )}
     </div>
   );

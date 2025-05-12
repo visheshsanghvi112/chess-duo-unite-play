@@ -3,14 +3,16 @@ import React from 'react';
 import { GameState, Position } from '../types/chess';
 import ChessSquare from './ChessSquare';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { BoardTheme } from './BoardThemeSelector';
 
 interface ChessBoardProps {
   gameState: GameState;
   onSquareClick: (position: Position) => void;
   flipped?: boolean;
+  boardTheme: BoardTheme;
 }
 
-const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipped = false }) => {
+const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipped = false, boardTheme }) => {
   const { board, selectedPiece, validMoves, check } = gameState;
   const isMobile = useIsMobile();
 
@@ -53,6 +55,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
             isSelected={isSelected}
             isValidMove={isValidMovePosition(position)}
             isCheck={isInCheck(position)}
+            boardTheme={boardTheme}
             onSquareClick={onSquareClick}
           />
         );
@@ -73,18 +76,18 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
     if (isMobile) {
       // Simplified labels for mobile
       return (
-        <div className="flex-1 grid grid-cols-8 grid-rows-8">
+        <div className="flex-1 grid grid-cols-8 grid-rows-8 overflow-hidden rounded-md border-2 border-primary/30">
           {renderBoard()}
         </div>
       );
     }
 
     return (
-      <>
+      <div className="chess-board-wrapper">
         <div className="flex">
           <div className="w-6"></div> {/* Spacer */}
           {displayFiles.map((file, i) => (
-            <div key={file} className="flex-1 text-center font-semibold text-sm">
+            <div key={file} className="flex-1 text-center font-semibold text-xs opacity-70">
               {file}
             </div>
           ))}
@@ -94,19 +97,19 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
         <div className="flex">
           <div className="w-6 flex flex-col">
             {displayRanks.map((rank, i) => (
-              <div key={rank} className="flex-1 flex items-center justify-center font-semibold text-sm">
+              <div key={rank} className="flex-1 flex items-center justify-center font-semibold text-xs opacity-70">
                 {rank}
               </div>
             ))}
           </div>
           
-          <div className="flex-1 grid grid-cols-8 grid-rows-8">
+          <div className="flex-1 grid grid-cols-8 grid-rows-8 overflow-hidden rounded-md border-2 border-primary/30 shadow-lg">
             {renderBoard()}
           </div>
           
           <div className="w-6 flex flex-col">
             {displayRanks.map((rank, i) => (
-              <div key={`right-${rank}`} className="flex-1 flex items-center justify-center font-semibold text-sm">
+              <div key={`right-${rank}`} className="flex-1 flex items-center justify-center font-semibold text-xs opacity-70">
                 {rank}
               </div>
             ))}
@@ -116,13 +119,13 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onSquareClick, flipp
         <div className="flex">
           <div className="w-6"></div> {/* Spacer */}
           {displayFiles.map((file, i) => (
-            <div key={`bottom-${file}`} className="flex-1 text-center font-semibold text-sm">
+            <div key={`bottom-${file}`} className="flex-1 text-center font-semibold text-xs opacity-70">
               {file}
             </div>
           ))}
           <div className="w-6"></div> {/* Spacer */}
         </div>
-      </>
+      </div>
     );
   };
 

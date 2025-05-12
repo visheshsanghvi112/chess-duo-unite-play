@@ -3,8 +3,9 @@ import React from 'react';
 import { GameState, Move, PieceColor } from '../types/chess';
 import { formatMoveForDisplay } from '../utils/notationUtils';
 import { Button } from "@/components/ui/button";
-import { Bell, BellOff } from 'lucide-react';
-import { setSoundMuted } from '../utils/soundUtils';
+import { Bell, BellOff, Undo, RotateCcw } from 'lucide-react';
+import { BoardTheme } from './BoardThemeSelector';
+import BoardThemeSelector from './BoardThemeSelector';
 
 interface GameInfoProps {
   gameState: GameState;
@@ -13,6 +14,8 @@ interface GameInfoProps {
   onJoinRoom: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
+  boardTheme: BoardTheme;
+  onChangeBoardTheme: (theme: BoardTheme) => void;
 }
 
 const GameInfo: React.FC<GameInfoProps> = ({
@@ -22,6 +25,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
   onJoinRoom,
   soundEnabled,
   onToggleSound,
+  boardTheme,
+  onChangeBoardTheme
 }) => {
   const { currentPlayer, gameStatus, history, isOnline, roomId, check } = gameState;
 
@@ -42,8 +47,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
   };
 
   return (
-    <div className="bg-card p-4 rounded-md shadow-md">
-      <div className="mb-4">
+    <div className="bg-card rounded-md shadow-md overflow-hidden">
+      <div className="p-4 border-b">
         <h2 className="text-xl font-bold mb-2">Game Status</h2>
         <div className="text-lg">
           {renderStatus()}
@@ -51,29 +56,36 @@ const GameInfo: React.FC<GameInfoProps> = ({
         
         {isOnline && roomId && (
           <div className="mt-2 p-2 bg-muted rounded-md">
-            <p className="font-medium">Room ID: <span className="font-bold">{roomId}</span></p>
-            <p className="text-sm text-gray-500">Share this ID with your opponent</p>
+            <p className="font-medium">Room ID: <span className="font-mono font-bold">{roomId}</span></p>
+            <p className="text-sm text-muted-foreground">Share this ID with your opponent</p>
           </div>
         )}
       </div>
       
-      <div className="mb-4">
-        <h3 className="font-semibold mb-2">Game Controls</h3>
+      <div className="p-4 border-b">
+        <h3 className="font-semibold mb-3">Game Controls</h3>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={onRestart} variant="outline">
+          <Button onClick={onRestart} variant="outline" size="sm" className="gap-1">
+            <RotateCcw size={16} />
             New Game
           </Button>
           
-          <Button onClick={onToggleSound} variant="outline" className="px-3" title={soundEnabled ? "Mute sounds" : "Unmute sounds"}>
-            {soundEnabled ? <Bell size={18} /> : <BellOff size={18} />}
+          <Button onClick={onToggleSound} variant="outline" size="sm" className="gap-1" title={soundEnabled ? "Mute sounds" : "Unmute sounds"}>
+            {soundEnabled ? <Bell size={16} /> : <BellOff size={16} />}
+            {soundEnabled ? "Sound On" : "Sound Off"}
           </Button>
+          
+          <BoardThemeSelector 
+            currentTheme={boardTheme}
+            onChange={onChangeBoardTheme}
+          />
           
           {!isOnline && (
             <>
-              <Button onClick={onCreateRoom} variant="secondary">
+              <Button onClick={onCreateRoom} variant="secondary" size="sm">
                 Create Online Room
               </Button>
-              <Button onClick={onJoinRoom} variant="secondary">
+              <Button onClick={onJoinRoom} variant="secondary" size="sm">
                 Join Online Room
               </Button>
             </>
@@ -81,27 +93,30 @@ const GameInfo: React.FC<GameInfoProps> = ({
         </div>
       </div>
       
-      <div>
+      <div className="p-4">
         <h3 className="font-semibold mb-2">Move History</h3>
-        <div className="h-48 overflow-y-auto bg-muted p-2 rounded-md">
+        <div className="h-48 overflow-y-auto bg-muted/50 p-2 rounded-md">
           {history.length === 0 ? (
-            <p className="text-gray-500 italic">No moves yet</p>
+            <p className="text-muted-foreground italic">No moves yet</p>
           ) : (
-            <div className="grid grid-cols-2 gap-1">
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1">
               {history.map((move, idx) => {
-                const moveNumber = idx + 1;
+                const moveNumber = Math.floor(idx / 2) + 1;
+                const isWhiteMove = idx % 2 === 0;
                 const isCheckMove = idx === history.length - 1 && check.inCheck;
                 const isCheckmateMove = isCheckMove && gameStatus === 'checkmate';
                 
                 return (
                   <div 
                     key={idx} 
-                    className={`px-2 py-1 ${idx % 2 === 0 ? 'bg-background rounded-sm' : ''}`}
+                    className={`px-2 py-1 rounded ${isWhiteMove ? 'bg-background/80' : ''} ${
+                      idx === history.length - 1 ? 'ring-1 ring-primary' : ''
+                    }`}
                   >
-                    {idx % 2 === 0 && (
-                      <span className="font-semibold mr-1">{Math.ceil(moveNumber/2)}.</span>
+                    {isWhiteMove && (
+                      <span className="font-semibold mr-1">{moveNumber}.</span>
                     )}
-                    {formatMoveForDisplay(move, moveNumber, isCheckMove, isCheckmateMove)}
+                    {formatMoveForDisplay(move, idx + 1, isCheckMove, isCheckmateMove)}
                   </div>
                 );
               })}
