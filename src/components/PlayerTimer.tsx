@@ -69,8 +69,7 @@ const PlayerTimer: React.FC<PlayerTimerProps> = ({ timers, currentPlayer, gameSt
                 {isWhiteTimeLow && <AlertTriangle size={16} className="inline ml-1 animate-pulse" />}
               </span>
             </div>
-            <Progress value={whiteProgress} className="h-1.5 mt-1" 
-              variant={isWhiteTimeLow ? "destructive" : "default"} />
+            <Progress value={whiteProgress} className={`h-1.5 mt-1 ${isWhiteTimeLow ? 'bg-destructive/20 [&>div]:bg-destructive' : ''}`} />
           </div>
         </div>
       </div>
@@ -88,8 +87,7 @@ const PlayerTimer: React.FC<PlayerTimerProps> = ({ timers, currentPlayer, gameSt
                 {isBlackTimeLow && <AlertTriangle size={16} className="inline ml-1 animate-pulse" />}
               </span>
             </div>
-            <Progress value={blackProgress} className="h-1.5 mt-1" 
-              variant={isBlackTimeLow ? "destructive" : "default"} />
+            <Progress value={blackProgress} className={`h-1.5 mt-1 ${isBlackTimeLow ? 'bg-destructive/20 [&>div]:bg-destructive' : ''}`} />
           </div>
         </div>
       </div>

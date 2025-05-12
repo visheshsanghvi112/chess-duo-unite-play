@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import ChessBoard from './ChessBoard';
 import GameInfo from './GameInfo';
@@ -32,6 +33,14 @@ const generateUUID = (): string => {
     return v.toString(16);
   });
 };
+
+// Define the ChessGameProps interface
+interface ChessGameProps {
+  initialMode?: { 
+    type: 'local' | 'online';
+    roomId?: string;
+  };
+}
 
 const ChessGame: React.FC<ChessGameProps> = ({ initialMode = { type: 'local' } }) => {
   const { toast } = useToast();
